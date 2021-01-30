@@ -22,7 +22,7 @@ def create_coffee_roulette(working_dir):
             participant = input("Enter participant name or 'x' if you are done: ")
             if participant == 'x':
                 break
-            crParticipantDict[id] = participant    
+            crParticipantDict[id] = (participant, [])    
             id += 1
         pickle.dump(crParticipantDict, open(crConfig.file_pkl, "wb" ))
         
@@ -38,7 +38,7 @@ def add_participants(working_dir, participants):
       working_dir (str) : full path to file directory
       participants (list of str) : names of participants to be added
     """  
-    # load files
+    # load files    
     crProbMatrix = np.load(crConfig.file_npy)
     crParticipantDict = pickle.load(open(crConfig.file_pkl, "rb" ))
     
@@ -51,7 +51,7 @@ def add_participants(working_dir, participants):
         np.fill_diagonal(crProbMatrix, 0)
         
         # update participant dictionary
-        crParticipantDict[i] = name
+        crParticipantDict[i] = (name, [])
     
     for i in range(crProbMatrix.shape[0]):
         i_not0 = np.nonzero(crProbMatrix[i,:])[0]
@@ -60,7 +60,7 @@ def add_participants(working_dir, participants):
     np.save(crConfig.file_npy, crProbMatrix)
     pickle.dump(crParticipantDict, open(crConfig.file_pkl, "wb" ))
                                 
-def get_pairs(working_dir):
+def get_pairs(working_dir, conv_starters = True):
     """
     Generates pairs of participants based on the probability matrix
     such that people can only be paired with those they have not had
@@ -70,8 +70,9 @@ def get_pairs(working_dir):
     ---
     PARAMS:
       working_dir (str) : full path to desired file directory
+      conv_starters (bool) : whether to include suggested conversation starters in the output
     """
-    # load files 
+    # load_files
     crProbMatrix = np.load(crConfig.file_npy)
     crParticipantDict = pickle.load(open(crConfig.file_pkl, "rb" ))
     
@@ -86,10 +87,43 @@ def get_pairs(working_dir):
             i = np.delete(i,jds_to_remove)
             j = np.delete(j,jds_to_remove)
         id = np.random.choice(len(i))
-        print(crParticipantDict[i[id]], "will have coffee with", crParticipantDict[j[id]])
+        
+        if conv_starters == True:
+            # find conv starters not used by either participant
+            used_conv_starters = crParticipantDict[i[id]][1] + crParticipantDict[j[id]][1]
+            all_conv_starters = np.arange(len(open(crConfig.file_txt).readlines( )))
+            available_conv_starters = np.setdiff1d(all_conv_starters, used_conv_starters)
+
+            # pick a random question
+            if available_conv_starters.shape[0] > 0:
+                q_id = np.random.choice(available_conv_starters)
+                with open(crConfig.file_txt, "r") as text_file:
+                    for l, line in enumerate(text_file):
+                        if l == q_id:
+                            question = line   
+            else:
+                print("All conversation starters have been used! Add more!")
+                break
+            
+            # add the question id to participants' conversation starter history
+            crParticipantDict[i[id]][1].append(q_id)
+            crParticipantDict[j[id]][1].append(q_id)
+            
+            output_str = f"@{crParticipantDict[i[id]][0]} will have coffee with @{crParticipantDict[j[id]][0]}. Suggested conversation starter: {question} "
+        else:    
+            output_str = f"@{crParticipantDict[i[id]][0]} will have coffee with @{crParticipantDict[j[id]][0]}"
+        print(output_str)
         used_ids = np.concatenate((used_ids, [i[id], j[id]]))
         crProbMatrix[i[id],j[id]] = 0
+        crProbMatrix[j[id],i[id]] = 0
     if crProbMatrix.shape[0] % 2 == 1:
         unpaired_id = np.setdiff1d(np.arange(crProbMatrix.shape[0]), used_ids)
-        print(crParticipantDict[unpaired_id], "was not paired with anyone this time!")
+        print(crParticipantDict[unpaired_id[0]][0], "was not paired with anyone this time!")
+        
+    # update probability matrix
+    for row in range(crProbMatrix.shape[0]):
+        nonzeros = crProbMatrix[row] != 0
+        crProbMatrix[row,nonzeros] = 1/nonzeros.sum()
+        
     np.save(crConfig.file_npy, crProbMatrix) 
+    pickle.dump(crParticipantDict, open(crConfig.file_pkl, "wb" ))

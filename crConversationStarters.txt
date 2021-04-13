@@ -4,7 +4,7 @@
 'If you could trade lives with one person, who would it be?'
 'What is one thing you would tell yourself 10 years ago?'
 'What is your biggest pet peeve?'
-'What about our society would surprise a time traveler?'
+'What about our society would surprise a time traveller?'
 'What is a funny prank you have played on someone?'
 'What is a secret talent you have?'
 'What is one embarrassing memory you have?'

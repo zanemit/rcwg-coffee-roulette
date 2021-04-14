@@ -78,7 +78,9 @@ def get_pairs(working_dir, conv_starters = True):
     
     used_ids = np.empty(0)
     for p in range(int(crProbMatrix.shape[0]/2)):
-        i, j = np.where(crProbMatrix == crProbMatrix.max())
+        unused_ids = np.setdiff1d(np.arange(crProbMatrix.shape[0]), used_ids)
+        max_val_remaining_crProbMatrix = crProbMatrix[np.repeat(unused_ids, unused_ids.shape), np.tile(unused_ids, unused_ids.shape)].max()
+        i, j = np.where(crProbMatrix == max_val_remaining_crProbMatrix)
         for x in used_ids:
             ids_to_remove = np.where(i == x)
             i = np.delete(i, ids_to_remove)

@@ -60,7 +60,7 @@ def add_participants(working_dir, participants):
     np.save(crConfig.file_npy, crProbMatrix)
     pickle.dump(crParticipantDict, open(crConfig.file_pkl, "wb" ))
                                 
-def get_pairs(working_dir, conv_starters = True):
+def get_pairs(working_dir, conv_starters = True, odd_nonrandom = True):
     """
     Generates pairs of participants based on the probability matrix
     such that people can only be paired with those they have not had
@@ -71,12 +71,18 @@ def get_pairs(working_dir, conv_starters = True):
     PARAMS:
       working_dir (str) : full path to desired file directory
       conv_starters (bool) : whether to include suggested conversation starters in the output
+      odd_nonrandom (bool) : excludes participant #25 if True, but someone randomly otherwise
     """
     # load_files
     crProbMatrix = np.load(crConfig.file_npy)
     crParticipantDict = pickle.load(open(crConfig.file_pkl, "rb" ))
     
-    used_ids = np.empty(0)
+    # if odd number of participants, have Zane sit the round out
+    if crProbMatrix.shape[0] % 2 == 1 and odd_nonrandom:
+        used_ids = np.asarray([25])
+    else:    
+        used_ids = np.empty(0)
+        
     for p in range(int(crProbMatrix.shape[0]/2)):
         unused_ids = np.setdiff1d(np.arange(crProbMatrix.shape[0]), used_ids)
         max_val_remaining_crProbMatrix = crProbMatrix[np.repeat(unused_ids, unused_ids.shape), np.tile(unused_ids, unused_ids.shape)].max()
@@ -89,13 +95,11 @@ def get_pairs(working_dir, conv_starters = True):
             i = np.delete(i,jds_to_remove)
             j = np.delete(j,jds_to_remove)
         id = np.random.choice(len(i))
-        
         if conv_starters == True:
             # find conv starters not used by either participant
             used_conv_starters = crParticipantDict[i[id]][1] + crParticipantDict[j[id]][1]
             all_conv_starters = np.arange(len(open(crConfig.file_txt).readlines( )))
             available_conv_starters = np.setdiff1d(all_conv_starters, used_conv_starters)
-
             # pick a random question
             if available_conv_starters.shape[0] > 0:
                 q_id = np.random.choice(available_conv_starters)
@@ -106,26 +110,24 @@ def get_pairs(working_dir, conv_starters = True):
             else:
                 print("All conversation starters have been used! Add more!")
                 break
-            
             # add the question id to participants' conversation starter history
             crParticipantDict[i[id]][1].append(q_id)
             crParticipantDict[j[id]][1].append(q_id)
-            
-            output_str = f"@{crParticipantDict[i[id]][0]} will have coffee with @{crParticipantDict[j[id]][0]}. Suggested conversation starter: {question} "
+            output_str = f"- @{crParticipantDict[i[id]][0]} will have coffee with @{crParticipantDict[j[id]][0]}. Suggested conversation starter: {question} "
         else:    
-            output_str = f"@{crParticipantDict[i[id]][0]} will have coffee with @{crParticipantDict[j[id]][0]}"
+            output_str = f"- @{crParticipantDict[i[id]][0]} will have coffee with @{crParticipantDict[j[id]][0]}"
         print(output_str)
         used_ids = np.concatenate((used_ids, [i[id], j[id]]))
         crProbMatrix[i[id],j[id]] = 0
         crProbMatrix[j[id],i[id]] = 0
-    if crProbMatrix.shape[0] % 2 == 1:
+        
+    if crProbMatrix.shape[0] % 2 == 1 and not odd_nonrandom:
         unpaired_id = np.setdiff1d(np.arange(crProbMatrix.shape[0]), used_ids)
         print(crParticipantDict[unpaired_id[0]][0], "was not paired with anyone this time!")
-        
+    
     # update probability matrix
     for row in range(crProbMatrix.shape[0]):
         nonzeros = crProbMatrix[row] != 0
         crProbMatrix[row,nonzeros] = 1/nonzeros.sum()
-        
     np.save(crConfig.file_npy, crProbMatrix) 
     pickle.dump(crParticipantDict, open(crConfig.file_pkl, "wb" ))

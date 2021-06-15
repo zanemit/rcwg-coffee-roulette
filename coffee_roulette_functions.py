@@ -49,6 +49,7 @@ def add_participants(working_dir, participants):
         crProbMatrix = np.hstack((crProbMatrix, np.full((i,1), 1)))
         crProbMatrix = np.vstack((crProbMatrix, np.full((1, i+1), 1)))
         np.fill_diagonal(crProbMatrix, 0)
+        #crProbMatrix[crProbMatrix > 0] = 1/i
         
         # update participant dictionary
         crParticipantDict[i] = (name, [])
@@ -59,8 +60,37 @@ def add_participants(working_dir, participants):
         
     np.save(crConfig.file_npy, crProbMatrix)
     pickle.dump(crParticipantDict, open(crConfig.file_pkl, "wb" ))
+
+def remove_participants(participants):
+    """
+    creates (or adds to) a file containing participants that have quit
+    1. find participant ID based on their name (value[0])
+    2. add it to a file and save
+    3. keep it in other files to avoid messing up other IDs
+    4. add the IDs from the "removed" file to user_ids at the start of get_pairs()
+    
+    PARAMETERS:
+    participants (list of str) : names of participants to be added
+    """
+    # load participantDict
+    crParticipantDict = pickle.load(open(crConfig.file_pkl, "rb"))
+    crParticipantArray = np.asarray(list(crParticipantDict.values()), dtype=object).flatten().reshape(-1,2)
+    all_participants = crParticipantArray[:,0]
+    
+    # load existing removedDict file
+    if crConfig.file_pkl_rmvd.exists():
+        crRemovedParticipantDict = pickle.load(open(crConfig.file_pkl_rmvd, "rb" ))
+    else:
+        crRemovedParticipantDict = {}
+    
+    for p in participants:
+        p_id = np.argwhere(all_participants == p)[0][0]
+        prev_meetings = crParticipantDict[p_id][1]
+        crRemovedParticipantDict[p_id] = (p, prev_meetings)
+    
+    pickle.dump(crRemovedParticipantDict, open(crConfig.file_pkl_rmvd, "wb" ))
                                 
-def get_pairs(working_dir, conv_starters = True, odd_nonrandom = True):
+def get_pairs(conv_starters = True, exclude_nonrandom = None):
     """
     Generates pairs of participants based on the probability matrix
     such that people can only be paired with those they have not had
@@ -71,19 +101,26 @@ def get_pairs(working_dir, conv_starters = True, odd_nonrandom = True):
     PARAMS:
       working_dir (str) : full path to desired file directory
       conv_starters (bool) : whether to include suggested conversation starters in the output
-      odd_nonrandom (bool) : excludes participant #25 if True, but someone randomly otherwise
+      exclude_nonrandom (int) : participant id to exclude (#25 for Zane, #1 for April); someone randomly exclude if None
     """
     # load_files
     crProbMatrix = np.load(crConfig.file_npy)
     crParticipantDict = pickle.load(open(crConfig.file_pkl, "rb" ))
     
+    used_ids = np.empty(0)
+    participant_number = crProbMatrix.shape[0]
+    
+    if crConfig.file_pkl_rmvd.exists():
+        crRemovedParticipantDict = pickle.load(open(crConfig.file_pkl_rmvd, "rb" ))
+        used_ids = np.append(used_ids, list(crRemovedParticipantDict.keys()))
+        used_ids = used_ids.flatten()
+        participant_number = participant_number - len(crRemovedParticipantDict)
+    
     # if odd number of participants, have Zane sit the round out
-    if crProbMatrix.shape[0] % 2 == 1 and odd_nonrandom:
-        used_ids = np.asarray([25])
-    else:    
-        used_ids = np.empty(0)
+    if participant_number % 2 == 1 and exclude_nonrandom != None:
+        used_ids = np.append(used_ids, [exclude_nonrandom])
         
-    for p in range(int(crProbMatrix.shape[0]/2)):
+    for p in range(int(participant_number/2)):
         unused_ids = np.setdiff1d(np.arange(crProbMatrix.shape[0]), used_ids)
         max_val_remaining_crProbMatrix = crProbMatrix[np.repeat(unused_ids, unused_ids.shape), np.tile(unused_ids, unused_ids.shape)].max()
         i, j = np.where(crProbMatrix == max_val_remaining_crProbMatrix)
@@ -121,7 +158,7 @@ def get_pairs(working_dir, conv_starters = True, odd_nonrandom = True):
         crProbMatrix[i[id],j[id]] = 0
         crProbMatrix[j[id],i[id]] = 0
         
-    if crProbMatrix.shape[0] % 2 == 1 and not odd_nonrandom:
+    if crProbMatrix.shape[0] % 2 == 1 and exclude_nonrandom == None:
         unpaired_id = np.setdiff1d(np.arange(crProbMatrix.shape[0]), used_ids)
         print(crParticipantDict[unpaired_id[0]][0], "was not paired with anyone this time!")
     
